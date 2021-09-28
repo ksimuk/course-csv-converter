@@ -36,8 +36,14 @@ jobs:
       with:
         go-version: '^1.17'
 
+    - name: make dist
+      run: mkdir dist
+
     - name: build
-      run: go build  -o dist ./...
+      run: go build -o dist ./...
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
 
     - name: additional items
       run: cp LICENCE.md README.md dist/
