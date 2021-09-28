@@ -1,0 +1,5 @@
+examples/*.csv
+bulk.exe
+convert.exe
+./bulk
+./convert
