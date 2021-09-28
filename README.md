@@ -1,4 +1,4 @@
-Converts codio CSV format into expanded version
+Converts codio CSV format into the expanded version
 
 # Usage
 
