@@ -1,39 +1,64 @@
 package convert
 
 import (
-	"bufio"
 	"encoding/csv"
+	"fmt"
 	"log"
 	"os"
 	"regexp"
 	"strings"
 )
 
-type parsed struct {
-	answer   string
-	attempts string
+const (
+	posRightAnswers = 6
+	posWrongAnswers = 8
+	posAnswers      = 25
+	posAttempts     = 26
+	postfixAttempts = "_attempt"
+	postfixAnswers  = "_answer"
+	postfixCorrect  = "_correct"
+)
+
+func nameToSnake(str string) string {
+	str = strings.Trim(str, " ")
+	str = strings.ReplaceAll(str, " ", "_")
+	str = strings.ToLower(str)
+	return str
 }
 
-func parseCodioJoin(val string, postfix string) map[string]string {
+func contains(name string, assessments []string) bool {
+	for _, i := range assessments {
+		if name == i {
+			return true
+		}
+	}
+	return false
+}
+
+func parseCodioJoin(val string, postfix string, assessments []string) map[string]string {
 	ret := make(map[string]string)
-	scanner := bufio.NewScanner(strings.NewReader(val))
 	header := ""
 	body := ""
 	nameMatch, err := regexp.Compile(`^.*?:$`)
 	if err != nil {
 		log.Fatal(err)
 	}
-	for scanner.Scan() {
-		text := scanner.Text()
+	split := strings.Split(val, "\n")
+	for _, text := range split {
+		// text := scanner.Text()
 		if nameMatch.MatchString(text) {
-			if len(header) > 0 {
-				ret[header] = body
+			assessmentName := strings.TrimSuffix(text, ":")
+			assessmentName = nameToSnake(assessmentName)
+			if contains(assessmentName, assessments) {
+				if len(header) > 0 {
+					ret[header] = body
+				}
+				header = assessmentName + postfix
+				body = ""
+				continue
 			}
-			header = strings.TrimSuffix(text, ":") + postfix
-			body = ""
-		} else {
-			body = body + text + "\n"
 		}
+		body = body + text + "\n"
 	}
 	if len(header) > 0 {
 		ret[header] = body
@@ -49,16 +74,16 @@ func getKeys(val map[string]string) []string {
 	return keys
 }
 
-func join(record []string, keysMap []string, values map[string]string) []string {
-	for _, v := range keysMap {
-		value, ok := values[v]
-		if !ok {
-			value = ""
-		}
-		record = append(record, value)
-	}
-	return record
-}
+// func join(record []string, keysMap []string, values map[string]string) []string {
+// 	for _, v := range keysMap {
+// 		value, ok := values[v]
+// 		if !ok {
+// 			value = ""
+// 		}
+// 		record = append(record, value)
+// 	}
+// 	return record
+// }
 
 func uniq(s []string) []string {
 	m := make(map[string]bool)
@@ -71,6 +96,46 @@ func uniq(s []string) []string {
 		result = append(result, item)
 	}
 	return result
+}
+
+func extractAssessments(records [][]string) []string {
+	var assessments []string
+	for _, record := range records {
+		rightAnswers := strings.Split(record[posRightAnswers], ", ")
+		wrongAnswers := strings.Split(record[posWrongAnswers], ", ")
+		assessments = append(assessments, rightAnswers...)
+		assessments = append(assessments, wrongAnswers...)
+	}
+	assessments = uniq(assessments)
+	for k, v := range assessments {
+		assessments[k] = nameToSnake(v)
+	}
+	return assessments
+}
+
+func parseCodioCorrectness(record []string) map[string]string {
+	rightAnswers := strings.Split(record[posRightAnswers], ", ")
+	wrongAnswers := strings.Split(record[posWrongAnswers], ", ")
+	res := map[string]string{}
+	for _, v := range rightAnswers {
+		key := nameToSnake(v)
+		res[key+postfixCorrect] = "correct"
+	}
+	for _, v := range wrongAnswers {
+		key := nameToSnake(v)
+		res[key+postfixCorrect] = "incorrect"
+	}
+	return res
+}
+
+func merge(ms ...map[string]string) map[string]string {
+	res := map[string]string{}
+	for _, m := range ms {
+		for k, v := range m {
+			res[k] = v
+		}
+	}
+	return res
 }
 
 func Convert(srcFile string, dstFile string) {
@@ -100,12 +165,14 @@ func Convert(srcFile string, dstFile string) {
 	}
 	var keys []string
 
-	for _, record := range records {
-		answers := parseCodioJoin(record[25], "_anwser")
-		attempts := parseCodioJoin(record[26], "_attempts")
-		keys = append(keys, getKeys(answers)...)
-		keys = append(keys, getKeys(attempts)...)
+	assessments := extractAssessments(records)
+
+	for _, v := range assessments {
+		keys = append(keys, v+postfixAnswers)
+		keys = append(keys, v+postfixAttempts)
+		keys = append(keys, v+postfixCorrect)
 	}
+
 	keys = uniq(keys)
 	header = append(header, keys...)
 	for k, v := range header {
@@ -115,11 +182,20 @@ func Convert(srcFile string, dstFile string) {
 	csvOut.Write(header)
 
 	for _, record := range records {
-		values := parseCodioJoin(record[25], "_anwser")
-		for k, v := range parseCodioJoin(record[26], "_attempts") {
-			values[k] = v
+		answers := parseCodioJoin(record[posAnswers], postfixAnswers, assessments)
+		attempts := parseCodioJoin(record[posAttempts], postfixAttempts, assessments)
+
+		correct := parseCodioCorrectness(record)
+		additionalFields := merge(answers, attempts, correct)
+		for _, field := range keys {
+			value, ok := additionalFields[field]
+			if !ok {
+				fmt.Printf("missing \"%s\"\n", field)
+				record = append(record, "missing")
+			} else {
+				record = append(record, value)
+			}
 		}
-		res := join(record, keys, values)
-		csvOut.Write(res)
+		csvOut.Write(record)
 	}
 }
