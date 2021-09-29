@@ -30,6 +30,7 @@ func parseCodioJoin(val string, postfix string) map[string]string {
 				ret[header] = body
 			}
 			header = strings.TrimSuffix(text, ":") + postfix
+			header = strings.ReplaceAll(header, "_", " ")
 			body = ""
 		} else {
 			body = body + text + "\n"
