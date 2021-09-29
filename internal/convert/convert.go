@@ -30,7 +30,6 @@ func parseCodioJoin(val string, postfix string) map[string]string {
 				ret[header] = body
 			}
 			header = strings.TrimSuffix(text, ":") + postfix
-			header = strings.ReplaceAll(header, "_", " ")
 			body = ""
 		} else {
 			body = body + text + "\n"
@@ -109,6 +108,10 @@ func Convert(srcFile string, dstFile string) {
 	}
 	keys = uniq(keys)
 	header = append(header, keys...)
+	for k, v := range header {
+		header[k] = strings.ReplaceAll(v, " ", "_")
+
+	}
 	csvOut.Write(header)
 
 	for _, record := range records {
