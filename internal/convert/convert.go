@@ -111,6 +111,20 @@ func extractAssessments(records [][]string) []string {
 		assessments[k] = nameToSnake(v)
 	}
 	assessments = uniq(assessments)
+	if len(assessments) == 0 {
+		r := regexp.MustCompile(`[a-zA-Z0-9_]+?:`)
+		var matches []string
+		// can't parse assessments
+		for _, record := range records {
+			matches = append(matches, r.FindAllString(record[posAnswers], -1)...)
+		}
+		for _, match := range matches {
+			assessmentName := strings.TrimSuffix(match, ":")
+			assessmentName = nameToSnake(assessmentName)
+			assessments = append(assessments, assessmentName)
+		}
+		assessments = uniq(assessments)
+	}
 	return assessments
 }
 
