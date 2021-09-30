@@ -2,7 +2,6 @@ package convert
 
 import (
 	"encoding/csv"
-	"fmt"
 	"log"
 	"os"
 	"regexp"
@@ -88,6 +87,9 @@ func getKeys(val map[string]string) []string {
 func uniq(s []string) []string {
 	m := make(map[string]bool)
 	for _, item := range s {
+		if len(item) == 0 {
+			continue
+		}
 		m[item] = true
 	}
 
@@ -99,17 +101,16 @@ func uniq(s []string) []string {
 }
 
 func extractAssessments(records [][]string) []string {
-	var assessments []string
+	assessments := []string{}
 	for _, record := range records {
-		rightAnswers := strings.Split(record[posRightAnswers], ", ")
-		wrongAnswers := strings.Split(record[posWrongAnswers], ", ")
-		assessments = append(assessments, rightAnswers...)
-		assessments = append(assessments, wrongAnswers...)
+		assessmentsSplit := strings.Split(record[posRightAnswers]+","+record[posWrongAnswers], ",")
+		assessments = append(assessments, assessmentsSplit...)
 	}
-	assessments = uniq(assessments)
+
 	for k, v := range assessments {
 		assessments[k] = nameToSnake(v)
 	}
+	assessments = uniq(assessments)
 	return assessments
 }
 
@@ -166,19 +167,17 @@ func Convert(srcFile string, dstFile string) {
 	var keys []string
 
 	assessments := extractAssessments(records)
-
 	for _, v := range assessments {
 		keys = append(keys, v+postfixAnswers)
 		keys = append(keys, v+postfixAttempts)
 		keys = append(keys, v+postfixCorrect)
 	}
 
-	keys = uniq(keys)
 	header = append(header, keys...)
 	for k, v := range header {
-		header[k] = strings.ReplaceAll(v, " ", "_")
-
+		header[k] = nameToSnake(v)
 	}
+
 	csvOut.Write(header)
 
 	for _, record := range records {
@@ -190,8 +189,8 @@ func Convert(srcFile string, dstFile string) {
 		for _, field := range keys {
 			value, ok := additionalFields[field]
 			if !ok {
-				fmt.Printf("missing \"%s\"\n", field)
-				record = append(record, "missing")
+				// fmt.Printf("missing \"%s\"\n", field)
+				record = append(record, "")
 			} else {
 				record = append(record, value)
 			}
